@@ -5,6 +5,9 @@ import java.util.HashMap;
 import java.util.Map;
 
 public class ExchangeRateDatabase {
+
+    private static ExchangeRateDatabase instance;
+
     // Exchange rates to EURO - price for 1 Euro
      private final static ExchangeRate[] RATES = {
             new ExchangeRate("EUR", "Bruxelles", 1.0),
@@ -42,7 +45,7 @@ public class ExchangeRateDatabase {
     };
 
     private final static Map<String, ExchangeRate> CURRENCIES_MAP = new HashMap<>();
-    private Map<String, Double> exchangeRates = new HashMap<>();
+    private final Map<String, Double> exchangeRates = new HashMap<>();
 
 
     private final static String[] CURRENCIES_LIST;
@@ -56,6 +59,13 @@ public class ExchangeRateDatabase {
         CURRENCIES_MAP.keySet().toArray(CURRENCIES_LIST);
         Arrays.sort(CURRENCIES_LIST);
 
+    }
+
+    public static synchronized ExchangeRateDatabase getInstance() {
+        if (instance == null) {
+            instance = new ExchangeRateDatabase();
+        }
+        return instance;
     }
 
     /**

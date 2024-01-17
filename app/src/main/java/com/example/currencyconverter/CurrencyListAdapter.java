@@ -12,7 +12,7 @@ import java.util.List;
 
 public class CurrencyListAdapter extends BaseAdapter {
 
-    private List<CurrencyEntry> data;
+    private final List<CurrencyEntry> data;
 
     public CurrencyListAdapter(List<CurrencyEntry> data) {
         this.data = data;

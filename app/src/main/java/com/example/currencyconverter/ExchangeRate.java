@@ -1,9 +1,9 @@
 package com.example.currencyconverter;
 
 public class ExchangeRate {
-    private String currencyName;
+    private final String currencyName;
     private double rateForOneEuro;
-    private String capital;
+    private final String capital;
 
     public ExchangeRate(String currencyName, String capital, double rateForOneEuro) {
         this.currencyName = currencyName;

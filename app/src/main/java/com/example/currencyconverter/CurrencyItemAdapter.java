@@ -13,7 +13,7 @@ import java.util.List;
 
 public class CurrencyItemAdapter extends BaseAdapter {
     ExchangeRateDatabase rateDb;
-    private List<String> currencyNames;
+    private final List<String> currencyNames;
 
     public CurrencyItemAdapter(ExchangeRateDatabase db) {
         rateDb = db;

@@ -1,8 +1,8 @@
 package com.example.currencyconverter;
 
 public class CurrencyEntry {
-    private String currencyName;
-    private double exchangeRate;
+    private final String currencyName;
+    private final double exchangeRate;
 
     public CurrencyEntry(String currencyName, double exchangeRate) {
         this.currencyName = currencyName;

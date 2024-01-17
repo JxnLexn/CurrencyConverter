@@ -5,12 +5,16 @@ import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.widget.ShareActionProvider;
 import androidx.appcompat.widget.Toolbar;
 import androidx.core.view.MenuItemCompat;
+import androidx.work.OneTimeWorkRequest;
+import androidx.work.WorkInfo;
+import androidx.work.WorkManager;
 
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.res.Configuration;
 import android.os.Bundle;
+import android.os.Handler;
 import android.util.Log;
 import android.view.Menu;
 import android.view.MenuItem;
@@ -21,30 +25,14 @@ import android.widget.Spinner;
 import android.widget.TextView;
 import android.widget.Toast;
 
-import org.json.JSONArray;
-import org.json.JSONException;
-import org.json.JSONObject;
-
-import java.io.IOException;
-import java.util.ArrayList;
-import java.util.Iterator;
-import java.util.List;
-
-import okhttp3.Call;
-import okhttp3.Callback;
-import okhttp3.OkHttpClient;
-import okhttp3.Request;
-import okhttp3.Response;
-
 
 public class MainActivity extends AppCompatActivity {
-    ExchangeRateDatabase database = new ExchangeRateDatabase();
+    ExchangeRateDatabase database = ExchangeRateDatabase.getInstance();
     Spinner sourceCurrencySpinner;
     Spinner targetCurrencySpinner;
     EditText amount;
     Button calculate;
     private ShareActionProvider shareActionProvider;
-    private final OkHttpClient client = new OkHttpClient();
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -57,7 +45,7 @@ public class MainActivity extends AppCompatActivity {
         amount = findViewById(R.id.inputAmount);
         calculate = findViewById(R.id.calcButton);
 
-        Toolbar toolbar = (Toolbar)findViewById(R.id.toolbar);
+        Toolbar toolbar = findViewById(R.id.toolbar);
         toolbar.setBackgroundColor(getResources().getColor(R.color.blue));
         setSupportActionBar(toolbar);
 
@@ -87,69 +75,48 @@ public class MainActivity extends AppCompatActivity {
     @Override
     public boolean onOptionsItemSelected(@NonNull MenuItem item) {
         int id = item.getItemId();
-        if(id == R.id.my_menu_entry) {
+        if (id == R.id.my_menu_entry) {
             Intent intent = new Intent(this, CurrencyListActivity.class);
             startActivity(intent);
             return true;
         } else if (id == R.id.refresh_rate) {
-            updateCurrencies();
+            updateCurrenciesWorker();
             return true;
         }
         return super.onOptionsItemSelected(item);
     }
 
+    private void updateCurrenciesWorker() {
+        WorkManager workManager = WorkManager.getInstance(getApplicationContext());
+        OneTimeWorkRequest workRequest = new OneTimeWorkRequest.Builder(ExchangeRateUpdateWorker.class).build();
+        workManager.enqueue(workRequest);
 
-    private void updateCurrencies() {
-        String url = "https://www.floatrates.com/daily/eur.json";
+        workManager.getWorkInfoByIdLiveData(workRequest.getId()).observe(this, workInfo -> {
+            if (workInfo != null && workInfo.getState() == WorkInfo.State.SUCCEEDED) {
+                Toast.makeText(MainActivity.this, "Currency rates successfully updated", Toast.LENGTH_LONG).show();
 
-        Request request = new Request.Builder().url(url).build();
-        client.newCall(request).enqueue(new Callback() {
-            @Override
-            public void onFailure(@NonNull Call call, @NonNull IOException e) {
-                runOnUiThread(() -> Toast.makeText(MainActivity.this, "Failed to fetch currency rates", Toast.LENGTH_SHORT).show());
-            }
-
-            @Override
-            public void onResponse(@NonNull Call call, @NonNull Response response) throws IOException {
-                if (!response.isSuccessful()) {
-                    runOnUiThread(() -> Toast.makeText(MainActivity.this, "Error fetching currency rates", Toast.LENGTH_SHORT).show());
-                    return;
-                }
-
-                try {
-                    String responseBody = response.body().string();
-                    JSONObject root = new JSONObject(responseBody);
-
-                    Iterator<String> keys = root.keys();
-                    while (keys.hasNext()) {
-                        String currencyCode = keys.next();
-                        JSONObject currencyObject = root.getJSONObject(currencyCode);
-                        double rate = currencyObject.getDouble("rate");
-
-                        database.setExchangeRate(currencyCode.toUpperCase(), rate);
-                    }
-
-                    runOnUiThread(() -> {
-                        CurrencyItemAdapter sourceAdapter = (CurrencyItemAdapter) sourceCurrencySpinner.getAdapter();
-                        CurrencyItemAdapter targetAdapter = (CurrencyItemAdapter) targetCurrencySpinner.getAdapter();
-                        if (sourceAdapter != null) {
-                            sourceAdapter.notifyDataSetChanged();
-                        }
-                        if (targetAdapter != null) {
-                            targetAdapter.notifyDataSetChanged();
-                        }
-                        Toast.makeText(MainActivity.this, "Currency rates updated", Toast.LENGTH_SHORT).show();
-                    });
-                } catch (JSONException e) {
-                    runOnUiThread(() -> Toast.makeText(MainActivity.this, "Error parsing JSON data", Toast.LENGTH_SHORT).show());
-                } finally {
-                    response.close();
-                }
+                updateCurrencyAdapters();
+            } else if (workInfo != null && workInfo.getState() == WorkInfo.State.FAILED) {
+                Toast.makeText(MainActivity.this, "Currency rates could not be updated. Please check your connection.", Toast.LENGTH_LONG).show();
             }
         });
     }
 
+    private void updateCurrencyAdapters() {
+        new Handler().postDelayed(() -> {
+            int sourceCurrencyPosition = sourceCurrencySpinner.getSelectedItemPosition();
+            int targetCurrencyPosition = targetCurrencySpinner.getSelectedItemPosition();
 
+            CurrencyItemAdapter newSourceAdapter = new CurrencyItemAdapter(ExchangeRateDatabase.getInstance());
+            CurrencyItemAdapter newTargetAdapter = new CurrencyItemAdapter(ExchangeRateDatabase.getInstance());
+
+            sourceCurrencySpinner.setAdapter(newSourceAdapter);
+            targetCurrencySpinner.setAdapter(newTargetAdapter);
+
+            sourceCurrencySpinner.setSelection(sourceCurrencyPosition);
+            targetCurrencySpinner.setSelection(targetCurrencyPosition);
+        }, 600); //
+    }
 
 
     @Override
@@ -173,8 +140,7 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected void onResume() {
         super.onResume();
-
-        // Wiederherstellen der Benutzereingaben (Spinner)
+        updateCurrenciesWorker();
         SharedPreferences prefs = getPreferences(Context.MODE_PRIVATE);
         int sourceCurrencyPosition = prefs.getInt("SourceCurrencyPosition", 0);
         int targetCurrencyPosition = prefs.getInt("TargetCurrencyPosition", 0);
@@ -183,9 +149,6 @@ public class MainActivity extends AppCompatActivity {
 
         String enteredValue = prefs.getString("enteredValue", "");
         amount.setText(enteredValue);
-
-
-
 
     }
 
@@ -204,13 +167,7 @@ public class MainActivity extends AppCompatActivity {
 
     private void setupUI() {
         String[] currencyNames = database.getCurrencies();
-        updateCurrencies();
-        // ArrayAdapter für die Spinners erstellen
-       // ArrayAdapter<String> adapter = new ArrayAdapter<>(this, android.R.layout.simple_spinner_item, currencyNames);
-        //adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
-
-        // Spinner für Quellwährung und Zielwährung aus dem Layout holen und den ArrayAdapter setzen
-
+        updateCurrenciesWorker();
         sourceCurrencySpinner.setAdapter(new CurrencyItemAdapter(database));
         targetCurrencySpinner.setAdapter(new CurrencyItemAdapter(database));
 
