@@ -25,6 +25,13 @@ import android.widget.Spinner;
 import android.widget.TextView;
 import android.widget.Toast;
 
+/**
+ * Currency Converter App
+ *
+ * @author Chantal Deusch
+ * @author Jan Gaschler
+ */
+
 
 public class MainActivity extends AppCompatActivity {
     ExchangeRateDatabase database = ExchangeRateDatabase.getInstance();
